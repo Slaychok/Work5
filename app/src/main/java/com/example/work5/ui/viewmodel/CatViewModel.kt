@@ -4,9 +4,9 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import com.example.work5.data.network.CatApi
+import com.example.work5.data.repository.CatRepository
 import com.example.work5.data.database.CatDatabase
-import kotlinx.coroutines.Dispatchers
+import com.example.work5.data.network.CatApi
 import kotlinx.coroutines.launch
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -15,25 +15,27 @@ class CatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val catDao = CatDatabase.getDatabase(application).catDao()
 
-    val catImageUrl = MutableLiveData<String>()
-    val error = MutableLiveData<String>()
-
+    // Инициализация репозитория
     private val retrofit = Retrofit.Builder()
         .baseUrl("https://api.thecatapi.com/")
         .addConverterFactory(GsonConverterFactory.create())
         .build()
 
-    private val catApi: CatApi = retrofit.create(CatApi::class.java)
+    private val catApi = retrofit.create(CatApi::class.java)
+    private val repository = CatRepository(catDao, catApi)
+
+    val catImageUrl = MutableLiveData<String>()
+    val error = MutableLiveData<String>()
 
     fun fetchCat() {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch {
             try {
-                val response = catApi.getCat().execute()
+                val response = repository.fetchCatFromApi()
                 if (response.isSuccessful) {
                     response.body()?.let {
                         if (it.isNotEmpty()) {
                             val cat = it[0]
-                            catDao.insertCat(cat) // Сохранение кота в базу данных
+                            repository.saveCatToDb(cat) // Сохранение кота через репозиторий
                             catImageUrl.postValue(cat.url)
                         } else {
                             error.postValue("No cat data found")
@@ -49,8 +51,8 @@ class CatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun loadCatFromDb() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val cat = catDao.getCat()
+        viewModelScope.launch {
+            val cat = repository.getCatFromDb()
             if (cat != null) {
                 catImageUrl.postValue(cat.url)
             } else {
