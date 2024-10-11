@@ -27,27 +27,23 @@ class CatViewModel(application: Application) : AndroidViewModel(application) {
     val catImageUrl = MutableLiveData<String>()
     val error = MutableLiveData<String>()
 
+    // Использование enqueue вместо корутин
     fun fetchCat() {
-        viewModelScope.launch {
-            try {
-                val response = repository.fetchCatFromApi()
-                if (response.isSuccessful) {
-                    response.body()?.let {
-                        if (it.isNotEmpty()) {
-                            val cat = it[0]
-                            repository.saveCatToDb(cat) // Сохранение кота через репозиторий
-                            catImageUrl.postValue(cat.url)
-                        } else {
-                            error.postValue("No cat data found")
+            repository.fetchCatFromApi { result ->
+                result.onSuccess { cats ->
+                    if (cats.isNotEmpty()) {
+                        val cat = cats[0]
+                        viewModelScope.launch {
+                            repository.saveCatToDb(cat)  // Сохранение кота через репозиторий
                         }
+                        catImageUrl.postValue(cat.url)
+                    } else {
+                        error.postValue("No cat data found")
                     }
-                } else {
-                    error.postValue("Error code: ${response.code()}")
+                }.onFailure { throwable ->
+                    error.postValue(throwable.message)
                 }
-            } catch (e: Exception) {
-                error.postValue(e.message)
             }
-        }
     }
 
     fun loadCatFromDb() {
@@ -61,3 +57,59 @@ class CatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 }
+
+
+
+
+
+
+
+//class CatViewModel(application: Application) : AndroidViewModel(application) {
+//
+//    private val catDao = CatDatabase.getDatabase(application).catDao()
+//
+//    private val retrofit = Retrofit.Builder()
+//        .baseUrl("https://api.thecatapi.com/")
+//        .addConverterFactory(GsonConverterFactory.create())
+//        .build()
+//
+//    private val catApi = retrofit.create(CatApi::class.java)
+//    private val repository = CatRepository(catDao, catApi)
+//
+//    val catImageUrl = MutableLiveData<String>()
+//    val error = MutableLiveData<String>()
+//
+//    fun fetchCat() {
+//        viewModelScope.launch {
+//            try {
+//                val response = repository.fetchCatFromApi()
+//                if (response.isSuccessful) {
+//                    response.body()?.let {
+//                        if (it.isNotEmpty()) {
+//                            val cat = it[0]
+//                            repository.saveCatToDb(cat) // Сохранение кота через репозиторий
+//                            catImageUrl.postValue(cat.url)
+//                        } else {
+//                            error.postValue("No cat data found")
+//                        }
+//                    }
+//                } else {
+//                    error.postValue("Error code: ${response.code()}")
+//                }
+//            } catch (e: Exception) {
+//                error.postValue(e.message)
+//            }
+//        }
+//    }
+//
+//    fun loadCatFromDb() {
+//        viewModelScope.launch {
+//            val cat = repository.getCatFromDb()
+//            if (cat != null) {
+//                catImageUrl.postValue(cat.url)
+//            } else {
+//                error.postValue("No cat in database")
+//            }
+//        }
+//    }
+//}
